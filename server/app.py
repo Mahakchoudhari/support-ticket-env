@@ -2,7 +2,6 @@ from fastapi import FastAPI
 from support_env import SupportEnv
 
 app = FastAPI()
-
 env = SupportEnv()
 
 @app.post("/reset")

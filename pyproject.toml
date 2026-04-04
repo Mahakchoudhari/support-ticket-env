@@ -1,16 +1,19 @@
 [project]
 name = "support-ticket-env"
 version = "0.1.0"
-description = "OpenEnv customer support simulation environment"
-authors = [
-    { name="Mahak Choudhari" }
-]
+description = "OpenEnv customer support simulation"
+authors = [{ name="Mahak Choudhari" }]
+
 dependencies = [
     "fastapi",
     "uvicorn",
     "pydantic",
-    "requests"
+    "requests",
+    "openenv ==0.1.13"
 ]
 
+[project.scripts]
+server = "server.app:app"
+
 [tool.openenv]
-entry_point = "app:app"
+entry_point = "server.app:app"
