@@ -1,0 +1,16 @@
+[project]
+name = "support-ticket-env"
+version = "0.1.0"
+description = "OpenEnv customer support simulation environment"
+authors = [
+    { name="Mahak Choudhari" }
+]
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "requests"
+]
+
+[tool.openenv]
+entry_point = "app:app"
