@@ -1,20 +1,24 @@
-from support_env import SupportEnv
+import requests
+import os
 
-env = SupportEnv()
 
+BASE_URL = "https://Mahakchoudhari-support-ticket-env.hf.space"
 print("[START]")
 
 total_score = 0
 
-# Loop through all 3 tasks
-for i in range(3):
-    obs = env.reset(i)
-    done = False
+for task_id in range(3):
 
+    # Reset environment
+    res = requests.post(f"{BASE_URL}/reset", params={"task_id": task_id})
+    obs = res.json()["observation"]
+
+    done = False
     step_num = 0
 
     while not done:
 
+        # Simple rule-based logic
         if step_num == 0:
             action = {"type": "classify", "content": "billing"}
 
@@ -27,18 +31,20 @@ for i in range(3):
                 "content": "sorry we will help and resolve your issue with refund"
             }
 
-        # Take step in environment
-        obs, reward, done, _ = env.step(action)
+        # Send action
+        res = requests.post(f"{BASE_URL}/step", json=action)
+        data = res.json()
 
-        # Required logs
+        obs = data["observation"]
+        reward = data["reward"]
+        done = data["done"]
+
         print("[STEP] action:", action)
         print("[STEP] reward:", reward)
 
         step_num += 1
 
-        # Safety break (VERY IMPORTANT)
         if step_num > 5:
-            print("[STEP] forced stop")
             break
 
         if done:
