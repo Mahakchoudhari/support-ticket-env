@@ -3,6 +3,8 @@ description: Customer support simulation
 
 tasks: 3
 
+server: server.app:main
+
 observation_space:
   ticket: string
   last_action: string

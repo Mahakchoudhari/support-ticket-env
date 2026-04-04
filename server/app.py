@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from support_env import SupportEnv
+import uvicorn
 
 app = FastAPI()
 env = SupportEnv()
@@ -22,3 +23,11 @@ def step(action: dict):
 @app.get("/state")
 def state():
     return env.state()
+
+
+def main():
+    uvicorn.run("server.app:app", host="0.0.0.0", port=8000)
+
+
+if __name__ == "__main__":
+    main()
