@@ -1,0 +1,17 @@
+name: support-ticket-env
+description: Customer support simulation
+
+tasks: 3
+
+observation_space:
+  ticket: string
+  last_action: string
+  feedback: string
+
+action_space:
+  type: string
+  content: string
+
+reward:
+  type: float
+  range: [0.0, 1.0]
