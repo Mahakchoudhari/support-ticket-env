@@ -1,13 +1,11 @@
 from pydantic import BaseModel
 
-# Models
 class Observation(BaseModel):
     ticket: str
     last_action: str
     feedback: str
 
 
-# Tasks
 TASKS = [
     {
         "id": "easy",
@@ -30,7 +28,6 @@ TASKS = [
 ]
 
 
-# Grader
 def grade_classification(pred, actual):
     return 1.0 if pred.lower() == actual else 0.0
 
@@ -53,65 +50,73 @@ def final_score(cls, act, resp):
     return 0.3 * cls + 0.3 * act + 0.4 * resp
 
 
-# Environment
 class SupportEnv:
 
     def __init__(self):
-        self.current_task = None
+        self.current_task = {}
         self.step_count = 0
+        self.history = {}
 
     def reset(self, task_id=0):
-        self.current_task = TASKS[task_id]
+        try:
+            self.current_task = TASKS[task_id]
+        except:
+            self.current_task = TASKS[0]
+
         self.step_count = 0
         self.history = {}
 
         return self._get_obs("Environment reset")
 
     def step(self, action):
-        self.step_count += 1
+        try:
+            self.step_count += 1
 
-        reward = 0.0
-        done = False
-        feedback = ""
+            reward = 0.0
+            done = False
+            feedback = ""
 
-        if action["type"] == "classify":
-            score = grade_classification(action["content"], self.current_task["label"])
-            self.history["classification"] = score
-            reward = score
-            feedback = f"classification score: {score}"
+            if action.get("type") == "classify":
+                score = grade_classification(action.get("content", ""), self.current_task["label"])
+                self.history["classification"] = score
+                reward = score
+                feedback = f"classification score: {score}"
 
-        elif action["type"] == "act":
-            score = grade_action(action["content"], self.current_task["action"])
-            self.history["action"] = score
-            reward = score
-            feedback = f"action score: {score}"
+            elif action.get("type") == "act":
+                score = grade_action(action.get("content", ""), self.current_task["action"])
+                self.history["action"] = score
+                reward = score
+                feedback = f"action score: {score}"
 
-        elif action["type"] == "respond":
-            score = grade_response(action["content"])
-            self.history["response"] = score
+            elif action.get("type") == "respond":
+                score = grade_response(action.get("content", ""))
+                self.history["response"] = score
 
-            final = final_score(
-                self.history.get("classification", 0),
-                self.history.get("action", 0),
-                score
-            )
+                final = final_score(
+                    self.history.get("classification", 0),
+                    self.history.get("action", 0),
+                    score
+                )
 
-            reward = final
-            done = True
-            feedback = f"final score: {final}"
+                reward = final
+                done = True
+                feedback = f"final score: {final}"
 
-        return self._get_obs(feedback), reward, done, {}
+            return self._get_obs(feedback), reward, done, {}
+
+        except Exception as e:
+            return self._get_obs(str(e)), 0.0, True, {}
 
     def state(self):
         return {
-            "task": self.current_task,
+            "task": self.current_task or {},
             "history": self.history,
             "steps": self.step_count
         }
 
     def _get_obs(self, feedback):
         return {
-            "ticket": self.current_task["ticket"],
+            "ticket": self.current_task.get("ticket", ""),
             "last_action": "",
             "feedback": feedback
         }

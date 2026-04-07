@@ -1,12 +1,22 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from support_env import SupportEnv
 import uvicorn
 
 app = FastAPI()
 env = SupportEnv()
 
+@app.get("/")
+def root():
+    return {"message": "API is running"}
+
 @app.post("/reset")
-def reset(task_id: int = 0):
+async def reset(request: Request):
+    try:
+        data = await request.json()
+        task_id = data.get("task_id", 0)
+    except:
+        task_id = 0
+
     obs = env.reset(task_id)
     return {"observation": obs}
 
