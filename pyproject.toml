@@ -3,6 +3,7 @@ name = "support-ticket-env"
 version = "0.1.0"
 description = "OpenEnv customer support simulation"
 authors = [{ name = "Mahak Choudhari" }]
+requires-python = ">=3.11"
 
 dependencies = [
     "fastapi",
