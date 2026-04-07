@@ -10,6 +10,7 @@ dependencies = [
     "uvicorn",
     "pydantic",
     "requests",
+    "openai",          
     "openenv==0.1.13"
 ]
 
