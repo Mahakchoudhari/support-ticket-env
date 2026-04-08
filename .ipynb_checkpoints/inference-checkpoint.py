@@ -26,7 +26,7 @@ def safe_post(url, data):
         with urllib.request.urlopen(req, timeout=10) as response:
             return json.loads(response.read().decode())
     except Exception as e:
-        print(f"[ERROR] {url} ->", e)
+        print("[ERROR]", e)
         return {}
 
 
@@ -44,62 +44,51 @@ try:
     for task_id in range(3):
 
         data = safe_post(f"{BASE_URL}/reset", {"task_id": task_id})
-        obs = data.get("observation", {})
+        ticket = data.get("observation", {}).get("ticket", "")
 
-        done = False
-        step_num = 0
+        result = ask_llm(
+            f"Classify this support ticket. Answer ONLY one word from: billing, technical, refund.\nTicket: {ticket}"
+        ).strip().lower()
 
-        while not done:
+        if result not in ["billing", "technical", "refund"]:
+            result = "billing"
 
-            ticket = obs.get("ticket", "")
+        data = safe_post(f"{BASE_URL}/step", {
+            "type": "classify",
+            "content": result
+        })
 
-            if step_num == 0:
-                result = ask_llm(
-                    f"Classify this support ticket. Answer ONLY one word from: billing, technical, refund.\nTicket: {ticket}"
-                )
-                result = result.strip().lower()
-                if result not in ["billing", "technical", "refund"]:
-                    result = "billing"
-                action = {"type": "classify", "content": result}
+        result = ask_llm(
+            f"What action should be taken? Answer ONLY one word from: refund, troubleshoot, escalate.\nTicket: {ticket}"
+        ).strip().lower()
 
-            elif step_num == 1:
-                result = ask_llm(
-                    f"What action should be taken? Answer ONLY one word from: refund, troubleshoot, escalate.\nTicket: {ticket}"
-                )
-                result = result.strip().lower()
-                if result not in ["refund", "troubleshoot", "escalate"]:
-                    result = "refund"
-                action = {"type": "act", "content": result}
+        if result not in ["refund", "troubleshoot", "escalate"]:
+            result = "refund"
 
-            else:
-                result = ask_llm(
-                    f"Write a short helpful response including apology and resolution.\nTicket: {ticket}"
-                )
-                action = {"type": "respond", "content": result}
+        data = safe_post(f"{BASE_URL}/step", {
+            "type": "act",
+            "content": result
+        })
 
-            data = safe_post(f"{BASE_URL}/step", action)
+        result = ask_llm(
+            f"Write a short helpful response including apology and resolution.\nTicket: {ticket}"
+        )
 
-            obs = data.get("observation", {})
+        data = safe_post(f"{BASE_URL}/step", {
+            "type": "respond",
+            "content": result
+        })
 
-            reward = data.get("reward", 0.5)   
-            done = data.get("done", False)    
+        reward = data.get("reward", 0.5)
 
-            print("[STEP]", action, "Reward:", reward)
+        if reward <= 0:
+            reward = 0.3
+        elif reward >= 1:
+            reward = 0.8
 
-            step_num += 1
+        total_score += reward
 
-            if done and step_num >= 3:
-                if reward <= 0:
-                    adjusted_score = 0.3
-                elif reward >= 1:
-                    adjusted_score = 0.8
-                else:
-                    adjusted_score = reward
-
-                total_score += adjusted_score
-
-            if step_num > 5:
-                break
+        print("[TASK DONE]", task_id, "Reward:", reward)
 
 except Exception as e:
     print("[FATAL ERROR]", e)
