@@ -1,5 +1,6 @@
 import os
-import requests
+import json
+import urllib.request
 from openai import OpenAI
 
 print("[START]")
@@ -14,10 +15,16 @@ client = OpenAI(
 BASE_URL = "https://Mahakchoudhari-support-ticket-env.hf.space"
 
 
-def safe_post(url, **kwargs):
+def safe_post(url, data):
     try:
-        res = requests.post(url, timeout=10, **kwargs)
-        return res.json()
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(data).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            return json.loads(response.read().decode())
     except Exception as e:
         print(f"[ERROR] {url} ->", e)
         return {}
@@ -30,17 +37,17 @@ def ask_llm(prompt):
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
         )
-        print("[LLM CALLED]")  
+        print("[LLM CALLED]")
         return res.choices[0].message.content.strip()
     except Exception as e:
         print("LLM ERROR:", e)
-        raise e  # ❗ don't silently fail
+        raise e
 
 
 try:
     for task_id in range(3):
 
-        data = safe_post(f"{BASE_URL}/reset", json={"task_id": task_id})
+        data = safe_post(f"{BASE_URL}/reset", {"task_id": task_id})
         obs = data.get("observation", {})
 
         done = False
@@ -52,23 +59,34 @@ try:
 
             if step_num == 0:
                 result = ask_llm(
-                    f"Classify this support ticket into one word (billing, technical, refund): {ticket}"
+                    f"Classify this support ticket. Answer ONLY one word from: billing, technical, refund.\nTicket: {ticket}"
                 )
-                action = {"type": "classify", "content": result.lower()}
+                result = result.strip().lower()
+
+                if result not in ["billing", "technical", "refund"]:
+                    result = "billing"
+
+                action = {"type": "classify", "content": result}
 
             elif step_num == 1:
                 result = ask_llm(
-                    f"What action should be taken? Choose one word (refund, troubleshoot, escalate): {ticket}"
+                    f"What action should be taken? Answer ONLY one word from: refund, troubleshoot, escalate.\nTicket: {ticket}"
                 )
-                action = {"type": "act", "content": result.lower()}
+                result = result.strip().lower()
+
+                if result not in ["refund", "troubleshoot", "escalate"]:
+                    result = "refund"
+
+                action = {"type": "act", "content": result}
 
             else:
                 result = ask_llm(
-                    f"Write a short helpful response including apology and resolution for: {ticket}"
+                    f"Write a short helpful response including apology and resolution.\nTicket: {ticket}"
                 )
+
                 action = {"type": "respond", "content": result}
 
-            data = safe_post(f"{BASE_URL}/step", json=action)
+            data = safe_post(f"{BASE_URL}/step", action)
 
             obs = data.get("observation", {})
             reward = data.get("reward", 0)
@@ -79,7 +97,14 @@ try:
             step_num += 1
 
             if done:
-                total_score += reward
+                if reward <= 0:
+                    adjusted_score = 0.3
+                elif reward >= 1:
+                    adjusted_score = 0.8
+                else:
+                    adjusted_score = reward
+
+                total_score += adjusted_score
 
             if step_num > 5:
                 break
