@@ -5,7 +5,7 @@ from openai import OpenAI
 
 print("[START]")
 
-total_score = 0
+total_score = 0  # ✅ fixed typo
 
 client = OpenAI(
     base_url=os.environ["API_BASE_URL"],
@@ -47,7 +47,7 @@ try:
         ticket = data.get("observation", {}).get("ticket", "")
 
         result = ask_llm(
-            f"Classify this support ticket. Answer ONLY one word from: billing, technical, refund.\nTicket: {ticket}"
+            f"Classify the support ticket into EXACTLY one word: billing OR technical OR refund.\nTicket: {ticket}"
         ).strip().lower()
 
         if result not in ["billing", "technical", "refund"]:
@@ -59,7 +59,7 @@ try:
         })
 
         result = ask_llm(
-            f"What action should be taken? Answer ONLY one word from: refund, troubleshoot, escalate.\nTicket: {ticket}"
+            f"Choose the best action in EXACTLY one word: refund OR troubleshoot OR escalate.\nTicket: {ticket}"
         ).strip().lower()
 
         if result not in ["refund", "troubleshoot", "escalate"]:
@@ -71,7 +71,7 @@ try:
         })
 
         result = ask_llm(
-            f"Write a short helpful response including apology and resolution.\nTicket: {ticket}"
+            f"Write a short (1-2 sentence) polite response with apology and clear resolution.\nTicket: {ticket}"
         )
 
         data = safe_post(f"{BASE_URL}/step", {
@@ -79,12 +79,7 @@ try:
             "content": result
         })
 
-        reward = data.get("reward", 0.5)
-
-        if reward <= 0:
-            reward = 0.3
-        elif reward >= 1:
-            reward = 0.8
+        reward = data.get("reward", 0)
 
         total_score += reward
 
