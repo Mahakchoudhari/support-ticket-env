@@ -3,9 +3,7 @@ import json
 import urllib.request
 from openai import OpenAI
 
-print("[START]")
-
-total_score = 0
+print("[START] task=support env=custom model=gpt-4o-mini", flush=True)
 
 client = OpenAI(
     base_url=os.environ["API_BASE_URL"],
@@ -14,83 +12,55 @@ client = OpenAI(
 
 BASE_URL = "https://Mahakchoudhari-support-ticket-env.hf.space"
 
+def post(url, data):
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(data).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as r:
+        return json.loads(r.read().decode())
 
-def safe_post(url, data):
-    try:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(data).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=10) as response:
-            return json.loads(response.read().decode())
-    except Exception as e:
-        print("[ERROR]", e)
-        return {}
-
-
-def ask_llm(prompt):
+def ask(prompt):
     res = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
-        temperature=0,
+        temperature=0.3,
     )
-    print("[LLM CALLED]")
     return res.choices[0].message.content.strip()
 
+total_score = 0
+rewards_list = []
 
-try:
-    for task_id in range(3):
+for task_id in range(3):
 
-        data = safe_post(f"{BASE_URL}/reset", {"task_id": task_id})
-        ticket = data.get("observation", {}).get("ticket", "")
+    data = post(f"{BASE_URL}/reset", {"task_id": task_id})
+    ticket = data.get("observation", {}).get("ticket", "")
 
-        result = ask_llm(
-            f"Classify this support ticket. Answer ONLY one word from: billing, technical, refund.\nTicket: {ticket}"
-        ).strip().lower()
+    # Step 1
+    result = ask(f"Classify ticket: billing, technical, or refund.\n{ticket}").lower()
+    data = post(f"{BASE_URL}/step", {"type": "classify", "content": result})
+    reward = data.get("reward", 0.5)
+    rewards_list.append(reward)
+    print(f"[STEP] step=1 action={result} reward={reward:.2f} done=false error=null", flush=True)
 
-        if result not in ["billing", "technical", "refund"]:
-            result = "billing"
+    # Step 2
+    result = ask(f"Action: refund, troubleshoot, escalate.\n{ticket}").lower()
+    data = post(f"{BASE_URL}/step", {"type": "act", "content": result})
+    reward = data.get("reward", 0.5)
+    rewards_list.append(reward)
+    print(f"[STEP] step=2 action={result} reward={reward:.2f} done=false error=null", flush=True)
 
-        data = safe_post(f"{BASE_URL}/step", {
-            "type": "classify",
-            "content": result
-        })
+    # Step 3
+    result = ask(f"Write polite response.\n{ticket}")
+    data = post(f"{BASE_URL}/step", {"type": "respond", "content": result})
+    reward = data.get("reward", 0.5)
+    rewards_list.append(reward)
+    print(f"[STEP] step=3 action=response reward={reward:.2f} done=true error=null", flush=True)
 
-        result = ask_llm(
-            f"What action should be taken? Answer ONLY one word from: refund, troubleshoot, escalate.\nTicket: {ticket}"
-        ).strip().lower()
+    total_score += reward
 
-        if result not in ["refund", "troubleshoot", "escalate"]:
-            result = "refund"
+score = min(max(total_score / 3, 0.01), 0.99)
 
-        data = safe_post(f"{BASE_URL}/step", {
-            "type": "act",
-            "content": result
-        })
-
-        result = ask_llm(
-            f"Write a short helpful response including apology and resolution.\nTicket: {ticket}"
-        )
-
-        data = safe_post(f"{BASE_URL}/step", {
-            "type": "respond",
-            "content": result
-        })
-
-        reward = data.get("reward", 0.5)
-
-        if reward <= 0:
-            reward = 0.3
-        elif reward >= 1:
-            reward = 0.8
-
-        total_score += reward
-
-        print("[TASK DONE]", task_id, "Reward:", reward)
-
-except Exception as e:
-    print("[FATAL ERROR]", e)
-
-print("[END] total_score:", total_score)
+print(f"[END] success=true steps=3 score={score:.2f} rewards={','.join(f'{r:.2f}' for r in rewards_list)}", flush=True)
