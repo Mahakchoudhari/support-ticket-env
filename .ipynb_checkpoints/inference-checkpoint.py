@@ -3,8 +3,6 @@ import json
 import urllib.request
 from openai import OpenAI
 
-print("[START] task=support env=custom model=gpt-4o-mini", flush=True)
-
 # Initialize client safely
 client = OpenAI(
     base_url=os.environ.get("API_BASE_URL"),
@@ -42,48 +40,61 @@ def ask(prompt):
         print(f"[ERROR] ask(): {e}", flush=True)
         return "error"
 
-# Allowed labels for classification and actions
+# Allowed labels
 class_labels = ["billing", "technical", "refund"]
 action_labels = ["refund", "troubleshoot", "escalate"]
 
-total_score = 0
-rewards_list = []
-
+# 🔥 IMPORTANT: Loop = multiple tasks with separate START/END
 for task_id in range(3):
+
+    print(f"[START] task=support_{task_id} env=custom model=gpt-4o-mini", flush=True)
+
     # Reset environment
     data = post(f"{BASE_URL}/reset", {"task_id": task_id})
     ticket = data.get("observation", {}).get("ticket", "")
 
-    # Step 1: Classify
-    response = ask(f"Classify ticket: billing, technical, or refund.\n{ticket}")
+    rewards_list = []
+
+    # ---------------- STEP 1: CLASSIFICATION ----------------
+    response = ask(f"Classify this support ticket into billing, technical, or refund:\n{ticket}")
     result = response.lower() if response else "technical"
+
     if result not in class_labels:
         result = "technical"
+
     data = post(f"{BASE_URL}/step", {"type": "classify", "content": result})
     reward = data.get("reward", 0.5)
     rewards_list.append(reward)
+
     print(f"[STEP] step=1 action={result} reward={reward:.2f} done=false error=null", flush=True)
 
-    # Step 2: Take action
-    response = ask(f"Action: refund, troubleshoot, escalate.\n{ticket}")
+    # ---------------- STEP 2: ACTION ----------------
+    response = ask(f"What action should be taken? Choose from refund, troubleshoot, escalate:\n{ticket}")
     result = response.lower() if response else "troubleshoot"
+
     if result not in action_labels:
         result = "troubleshoot"
+
     data = post(f"{BASE_URL}/step", {"type": "act", "content": result})
     reward = data.get("reward", 0.5)
     rewards_list.append(reward)
+
     print(f"[STEP] step=2 action={result} reward={reward:.2f} done=false error=null", flush=True)
 
-    # Step 3: Respond politely
-    response = ask(f"Write polite response.\n{ticket}")
+    # ---------------- STEP 3: RESPONSE ----------------
+    response = ask(f"Write a polite customer support response:\n{ticket}")
     result = response if response else "Sorry, we are looking into your issue."
+
     data = post(f"{BASE_URL}/step", {"type": "respond", "content": result})
     reward = data.get("reward", 0.5)
     rewards_list.append(reward)
+
     print(f"[STEP] step=3 action=response reward={reward:.2f} done=true error=null", flush=True)
 
-    total_score += reward
+    # ---------------- FINAL SCORE ----------------
+    score = min(max(sum(rewards_list) / len(rewards_list), 0.01), 0.99)
 
-# Calculate score safely
-score = min(max(total_score / 3, 0.01), 0.99)
-print(f"[END] success=true steps=3 score={score:.2f} rewards={','.join(f'{r:.2f}' for r in rewards_list)}", flush=True)
+    print(
+        f"[END] success=true steps=3 score={score:.2f} rewards={','.join(f'{r:.2f}' for r in rewards_list)}",
+        flush=True
+    )
